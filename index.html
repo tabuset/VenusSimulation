@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金星の動きと見え方シミュレーター</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --panel-bg: #1e293b;
+            --text-color: #e2e8f0;
+            --accent-color: #38bdf8;
+            --venus-color: #fbbf24;
+            --earth-color: #3b82f6;
+            --sun-color: #ef4444;
+        }
+
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 1.2rem;
+            text-align: center;
+            margin: 0 0 10px 0;
+            color: var(--accent-color);
+        }
+
+        /* Layout Grid */
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: auto auto 1fr;
+            gap: 10px;
+            flex-grow: 1;
+            height: 100%;
+        }
+
+        .box {
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            border: 1px solid #334155;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .box-title {
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+            z-index: 10;
+        }
+
+        /* Top Left: Orbit View */
+        .area-orbit {
+            grid-column: 1 / 2;
+            grid-row: 1 / 2;
+            height: 300px;
+        }
+
+        /* Top Center: Controls */
+        .area-controls {
+            grid-column: 2 / 3;
+            grid-row: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+            height: 300px;
+        }
+
+        /* Top Right: Phase View */
+        .area-phase {
+            grid-column: 3 / 4;
+            grid-row: 1 / 2;
+            height: 300px;
+        }
+
+        /* Middle: Time Slider */
+        .area-slider {
+            grid-column: 1 / 4;
+            grid-row: 2 / 3;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Bottom: Sky View */
+        .area-sky {
+            grid-column: 1 / 4;
+            grid-row: 3 / 4;
+            min-height: 200px;
+        }
+
+        /* UI Elements */
+        .status-display {
+            text-align: center;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            background: rgba(0,0,0,0.3);
+            padding: 8px;
+            border-radius: 6px;
+            width: 95%;
+        }
+        .status-highlight {
+            color: var(--venus-color);
+            font-weight: bold;
+            font-size: 1.05rem;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 2px;
+            background: #334155;
+            padding: 3px;
+            border-radius: 6px;
+            width: 100%;
+            justify-content: space-between;
+        }
+
+        .control-group button {
+            flex: 1;
+            padding: 6px 2px;
+            font-size: 0.75rem;
+        }
+
+        button {
+            background-color: #475569;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.9rem;
+        }
+        button:hover { background-color: #64748b; }
+        button.active { background-color: var(--accent-color); color: #0f172a; font-weight: bold; }
+        
+        button#playBtn {
+            width: 100%;
+            background-color: #22c55e;
+            font-weight: bold;
+            font-size: 1.1rem;
+            padding: 10px;
+            margin-top: 5px;
+        }
+        button#playBtn.paused { background-color: #eab308; }
+
+        input[type=range] {
+            width: 90%;
+            cursor: pointer;
+        }
+
+        .time-control {
+            width: 95%;
+            margin: 5px 0;
+            background: rgba(255,255,255,0.05);
+            padding: 5px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .time-control label {
+            font-size: 0.8rem;
+            display: block;
+            margin-bottom: 2px;
+            color: #94a3b8;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 800px) {
+            .container {
+                display: flex;
+                flex-direction: column;
+                height: auto;
+            }
+            .area-orbit, .area-controls, .area-phase { height: 260px; }
+            .area-sky { height: 300px; }
+            body { overflow-y: auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>金星の動きと見え方シミュレーター</h1>
+
+    <div class="container">
+        <!-- Top Left: Heliocentric Orbit -->
+        <div class="box area-orbit">
+            <div class="box-title">宇宙からの視点 (北極側。ただし太陽と地球を固定している)</div>
+            <canvas id="orbitCanvas"></canvas>
+        </div>
+
+        <!-- Top Center: Controls -->
+        <div class="box area-controls">
+            <div class="status-display">
+                <div>経過日数: <span id="dayDisplay" class="status-highlight">0</span> 日</div>
+                <div style="margin-top:5px; font-size: 0.85rem; color:#94a3b8;">金星の位置: <span id="venusState">外合</span></div>
+            </div>
+
+            <!-- Hour Slider for manual control -->
+            <div class="time-control">
+                <label for="hourSlider">時刻操作 (0時〜24時): <span id="timeText" style="color:white; font-weight:bold;">18:00</span></label>
+                <input type="range" id="hourSlider" min="0" max="23.9" step="0.1" value="18">
+            </div>
+
+            <div class="control-group">
+                <button onclick="setSpeed(0)" id="speedSuperSlow">超遅め</button>
+                <button onclick="setSpeed(1)" id="speedSlow">遅め</button>
+                <button onclick="setSpeed(2)" id="speedNormal">普通</button>
+                <button onclick="setSpeed(3)" id="speedFast" class="active">速め</button>
+                <button onclick="setSpeed(4)" id="speedSuperFast">超速め</button>
+            </div>
+
+            <button id="playBtn" onclick="togglePlay()">再生</button>
+        </div>
+
+        <!-- Top Right: Telescopic View -->
+        <div class="box area-phase">
+            <div class="box-title">望遠鏡での見え方</div>
+            <canvas id="phaseCanvas"></canvas>
+        </div>
+
+        <!-- Middle: Slider -->
+        <div class="box area-slider">
+            <label for="timeSlider" style="margin-bottom: 5px; font-size:0.9rem;">日付の経過 (会合周期)</label>
+            <input type="range" id="timeSlider" min="0" max="584" value="0" step="0.1">
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">スライダーを動かして日数を進められます (0日〜584日)</div>
+        </div>
+
+        <!-- Bottom: Geocentric Sky View -->
+        <div class="box area-sky">
+            <div class="box-title">南の空の様子 (日本)</div>
+            <canvas id="skyCanvas"></canvas>
+        </div>
+    </div>
+
+<script>
+    // --- Configuration & Physics Constants ---
+    const SYNODIC_PERIOD = 584; // Earth days for Venus to lap Earth
+    const R_EARTH_ORBIT = 120;
+    const R_VENUS_ORBIT = R_EARTH_ORBIT * 0.72;
+    
+    // Speed Settings (Days per Frame)
+    const SPEED_SETTINGS = [
+        { name: "super-slow", dayInc: 0.0015, diurnal: true },  
+        { name: "slow",       dayInc: 0.05,  diurnal: false }, 
+        { name: "normal",     dayInc: 0.2,   diurnal: false }, 
+        { name: "fast",       dayInc: 1.0,   diurnal: false }, 
+        { name: "super-fast", dayInc: 4.0,   diurnal: false }  
+    ];
+
+    // --- State ---
+    let state = {
+        totalDays: 0,      
+        hour: 18,          // Default to evening
+        isPlaying: false,
+        speedIndex: 3,     // Default "Fast"
+    };
+
+    // --- Star Generation (Randomized) ---
+    const stars = [];
+    function initStars() {
+        stars.length = 0;
+        // Generate stars that cover a wide range of Right Ascension (angles) and Declination (radius)
+        for(let i=0; i<150; i++) {
+            stars.push({
+                // Angle Offset: 0 to 2*PI*2 (cover more than full circle to ensure density)
+                angleOffset: Math.random() * Math.PI * 4, 
+                // Radius Scale relative to Sun path.
+                radiusScale: 0.5 + Math.random() * 1.5,
+                size: Math.random() * 1.5 + 0.5,
+                alpha: Math.random() * 0.5 + 0.5
+            });
+        }
+    }
+    initStars();
+
+    // --- DOM Elements ---
+    const orbitCanvas = document.getElementById('orbitCanvas');
+    const phaseCanvas = document.getElementById('phaseCanvas');
+    const skyCanvas = document.getElementById('skyCanvas');
+    const ctxOrbit = orbitCanvas.getContext('2d');
+    const ctxPhase = phaseCanvas.getContext('2d');
+    const ctxSky = skyCanvas.getContext('2d');
+    
+    const slider = document.getElementById('timeSlider');
+    const hourSlider = document.getElementById('hourSlider');
+    const playBtn = document.getElementById('playBtn');
+    const dayDisplay = document.getElementById('dayDisplay');
+    const timeText = document.getElementById('timeText');
+    const venusStateDisplay = document.getElementById('venusState');
+
+    // --- Resize Handling ---
+    function resizeCanvas() {
+        [orbitCanvas, phaseCanvas, skyCanvas].forEach(canvas => {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        });
+        drawAll();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    // --- Interaction ---
+    slider.addEventListener('input', (e) => {
+        state.totalDays = parseFloat(e.target.value);
+        if(state.isPlaying) togglePlay(); 
+        drawAll();
+    });
+
+    hourSlider.addEventListener('input', (e) => {
+        state.hour = parseFloat(e.target.value);
+        if(state.isPlaying && SPEED_SETTINGS[state.speedIndex].diurnal) {
+             togglePlay(); 
+        }
+        drawAll();
+    });
+
+    function setSpeed(index) {
+        state.speedIndex = index;
+        const buttons = document.querySelectorAll('.control-group button');
+        buttons.forEach((b, i) => {
+            if (i === index) b.classList.add('active');
+            else b.classList.remove('active');
+        });
+    }
+
+    function togglePlay() {
+        state.isPlaying = !state.isPlaying;
+        playBtn.innerText = state.isPlaying ? "一時停止" : "再生";
+        playBtn.classList.toggle('paused', state.isPlaying);
+        if (state.isPlaying) requestAnimationFrame(gameLoop);
+    }
+
+    // --- Main Loop ---
+    function gameLoop() {
+        if (!state.isPlaying) return;
+
+        const settings = SPEED_SETTINGS[state.speedIndex];
+        
+        state.totalDays += settings.dayInc;
+        
+        // Loop logic: use modulo or subtraction to maintain smooth fraction
+        if (state.totalDays >= parseFloat(slider.max)) {
+            state.totalDays -= parseFloat(slider.max);
+        }
+
+        if (settings.diurnal) {
+            state.hour = (state.hour + (settings.dayInc * 24)) % 24;
+        }
+
+        slider.value = state.totalDays;
+        hourSlider.value = state.hour;
+
+        drawAll();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- Drawing Functions ---
+
+    function drawAll() {
+        // Calculations
+        const cycleProgress = (state.totalDays % SYNODIC_PERIOD) / SYNODIC_PERIOD;
+        // Counter-Clockwise (CCW) revolution
+        const thetaRad = -(cycleProgress * Math.PI * 2) - (Math.PI / 2); 
+        
+        const vx = R_VENUS_ORBIT * Math.cos(thetaRad);
+        const vy = R_VENUS_ORBIT * Math.sin(thetaRad); 
+        const ex = 0;
+        const ey = R_EARTH_ORBIT;
+        const dist = Math.sqrt((vx - ex)**2 + (vy - ey)**2);
+        
+        const v_sun_x = -vx;
+        const v_sun_y = -vy;
+        const v_earth_x = ex - vx;
+        const v_earth_y = ey - vy;
+        
+        const dot = v_sun_x * v_earth_x + v_sun_y * v_earth_y;
+        const mag_vs = R_VENUS_ORBIT;
+        const mag_ve = dist;
+        const elongation = Math.atan2(vx, ey - vy); 
+
+        // UI Text Updates
+        dayDisplay.innerText = Math.floor(state.totalDays);
+        
+        const h = Math.floor(state.hour);
+        const m = Math.floor((state.hour - h) * 60);
+        timeText.innerText = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+        
+        let desc = "";
+        const deg = (state.totalDays / SYNODIC_PERIOD) * 360;
+        const normalizedDeg = deg % 360;
+        if (normalizedDeg < 12 || normalizedDeg > 348) desc = "外合 (太陽の向こう)";
+        else if (normalizedDeg > 168 && normalizedDeg < 192) desc = "内合 (太陽の手前)";
+        else if (normalizedDeg > 0 && normalizedDeg < 180) desc = "東方最大離角へ (宵の明星)";
+        else desc = "西方最大離角へ (明けの明星)";
+        venusStateDisplay.innerText = desc;
+
+        drawOrbit(thetaRad);
+        drawPhase(dist, dot, mag_vs, mag_ve, vx, vy);
+        drawSky(elongation, dist, dot, mag_vs, mag_ve, vx, vy);
+    }
+
+    function drawOrbit(thetaRad) {
+        const w = orbitCanvas.width;
+        const h = orbitCanvas.height;
+        const cx = w / 2;
+        const cy = 130; 
+
+        ctxOrbit.fillStyle = '#1e293b';
+        ctxOrbit.fillRect(0, 0, w, h);
+
+        ctxOrbit.save();
+        ctxOrbit.translate(cx, cy);
+
+        // Sun
+        ctxOrbit.fillStyle = '#ef4444';
+        ctxOrbit.beginPath();
+        ctxOrbit.arc(0, 0, 15, 0, Math.PI * 2);
+        ctxOrbit.fill();
+        ctxOrbit.fillStyle = 'white';
+        ctxOrbit.font = '12px Arial';
+        ctxOrbit.fillText("太陽", -12, -20);
+
+        // Earth Orbit (Dashed Line)
+        ctxOrbit.strokeStyle = '#3b82f6';
+        ctxOrbit.setLineDash([3, 5]);
+        ctxOrbit.beginPath();
+        ctxOrbit.arc(0, 0, R_EARTH_ORBIT, 0, Math.PI * 2);
+        ctxOrbit.stroke();
+        ctxOrbit.setLineDash([]); // Reset for other lines
+
+        // Venus Orbit
+        ctxOrbit.strokeStyle = '#475569';
+        ctxOrbit.setLineDash([5, 5]);
+        ctxOrbit.beginPath();
+        ctxOrbit.arc(0, 0, R_VENUS_ORBIT, 0, Math.PI * 2);
+        ctxOrbit.stroke();
+        ctxOrbit.setLineDash([]);
+
+        // Earth
+        const earthY = R_EARTH_ORBIT;
+        ctxOrbit.fillStyle = '#3b82f6';
+        ctxOrbit.beginPath();
+        ctxOrbit.arc(0, earthY, 12, 0, Math.PI * 2);
+        ctxOrbit.fill();
+        ctxOrbit.fillStyle = 'white';
+        ctxOrbit.fillText("地球", -12, earthY + 25);
+
+        // Observer (CCW Rotation)
+        const rotationAngle = -(state.hour - 12) * (Math.PI / 12) - (Math.PI/2);
+        
+        ctxOrbit.save();
+        ctxOrbit.translate(0, earthY);
+        ctxOrbit.fillStyle = 'red';
+        ctxOrbit.beginPath();
+        ctxOrbit.arc(12 * Math.cos(rotationAngle), 12 * Math.sin(rotationAngle), 3, 0, Math.PI*2);
+        ctxOrbit.fill();
+        ctxOrbit.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctxOrbit.beginPath();
+        ctxOrbit.moveTo(0,0);
+        ctxOrbit.lineTo(20 * Math.cos(rotationAngle), 20 * Math.sin(rotationAngle));
+        ctxOrbit.stroke();
+        ctxOrbit.restore();
+
+        // Venus
+        const vx = R_VENUS_ORBIT * Math.cos(thetaRad);
+        const vy = R_VENUS_ORBIT * Math.sin(thetaRad);
+        
+        ctxOrbit.save();
+        ctxOrbit.translate(vx, vy);
+        ctxOrbit.rotate(thetaRad + Math.PI); 
+
+        // Dark Side
+        ctxOrbit.fillStyle = '#334155'; 
+        ctxOrbit.beginPath();
+        ctxOrbit.arc(0, 0, 8, 0, Math.PI*2);
+        ctxOrbit.fill();
+
+        // Lit Side
+        ctxOrbit.fillStyle = '#fbbf24';
+        ctxOrbit.beginPath();
+        ctxOrbit.arc(0, 0, 8, -Math.PI/2, Math.PI/2);
+        ctxOrbit.fill();
+        
+        ctxOrbit.restore();
+
+        // Label
+        ctxOrbit.fillStyle = 'white';
+        ctxOrbit.fillText("金星", vx + 10, vy);
+
+        ctxOrbit.restore();
+    }
+
+    function drawPhase(dist, dot, mag_vs, mag_ve, vx, vy) {
+        const w = phaseCanvas.width;
+        const h = phaseCanvas.height;
+        const cx = w / 2;
+        const cy = h / 2;
+
+        ctxPhase.fillStyle = '#000';
+        ctxPhase.fillRect(0, 0, w, h);
+
+        const r = (3000 / dist); 
+        const cosPhase = dot / (mag_vs * mag_ve);
+        const isRightSideLit = (vx < 0); 
+        
+        // Calculate apparent size in arcseconds for display (Approx: Max 60", Min 10")
+        const arcSeconds = Math.round(2060 / dist);
+
+        ctxPhase.save();
+        ctxPhase.translate(cx, cy);
+
+        // Lit Circle
+        ctxPhase.fillStyle = '#fbbf24';
+        ctxPhase.beginPath();
+        ctxPhase.arc(0, 0, r, 0, Math.PI * 2);
+        ctxPhase.fill();
+
+        // Shadow
+        ctxPhase.fillStyle = 'black';
+        ctxPhase.beginPath();
+        if (isRightSideLit) {
+            ctxPhase.arc(0, 0, r, Math.PI * 0.5, Math.PI * 1.5); 
+        } else {
+            ctxPhase.arc(0, 0, r, Math.PI * 1.5, Math.PI * 0.5); 
+        }
+        ctxPhase.fill();
+
+        const terminatorWidth = r * Math.abs(cosPhase);
+        ctxPhase.fillStyle = (cosPhase > 0) ? '#fbbf24' : 'black'; 
+        ctxPhase.beginPath();
+        ctxPhase.ellipse(0, 0, terminatorWidth, r, 0, 0, Math.PI * 2);
+        ctxPhase.fill();
+
+        ctxPhase.restore();
+        
+        ctxPhase.fillStyle = 'white';
+        ctxPhase.font = '14px Arial';
+        ctxPhase.textAlign = 'center';
+        const percent = Math.round(((1 + cosPhase) / 2) * 100);
+        ctxPhase.fillText(`輝面比: ${percent}%`, w/2, h - 20);
+        ctxPhase.fillText(`視直径: 約${arcSeconds}秒`, w/2, h - 40);
+    }
+
+    // Helper to draw the tiny Venus with phase in Sky View
+    function drawTinyVenus(ctx, x, y, r, k, angleToSun, isDay) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(angleToSun); // Rotate so Sun is at angle 0 (Right)
+
+        // If day, style is dotted outline and faint fill
+        if (isDay) {
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([2, 2]);
+            ctx.fillStyle = 'rgba(251, 191, 36, 0.2)'; 
+        } else {
+            // If night, style is solid fill, no stroke
+            ctx.fillStyle = '#fbbf24';
+            ctx.strokeStyle = 'transparent';
+        }
+
+        // Draw Lit Limb (Right semicircle, always faces Sun)
+        ctx.beginPath();
+        ctx.arc(0, 0, r, -Math.PI/2, Math.PI/2); 
+
+        // Draw Terminator logic using Ellipse
+        if (isDay) {
+             ctx.stroke(); 
+             
+             const termW = r * Math.abs(2*k - 1);
+             ctx.beginPath();
+             if (k > 0.5) {
+                 ctx.ellipse(0, 0, termW, r, 0, Math.PI/2, Math.PI*1.5);
+             } else {
+                 ctx.ellipse(0, 0, termW, r, 0, -Math.PI/2, Math.PI/2);
+             }
+             ctx.stroke();
+             ctx.fill();
+
+        } else {
+            // Night Mode: Fill Lit Part
+            ctx.beginPath();
+            ctx.arc(0, 0, r, -Math.PI/2, Math.PI/2);
+            
+            if (k > 0.5) {
+                // Gibbous: Add Left Semi-Ellipse
+                ctx.ellipse(0, 0, r * (2*k - 1), r, 0, Math.PI/2, Math.PI*1.5);
+            } else {
+                // Crescent: Cut out Right Semi-Ellipse
+                ctx.ellipse(0, 0, r * (1 - 2*k), r, 0, Math.PI/2, -Math.PI/2, true);
+            }
+            ctx.fill();
+        }
+        
+        ctx.restore();
+    }
+
+    function drawSky(elongation, dist, dot, mag_vs, mag_ve, vx, vy) {
+        const w = skyCanvas.width;
+        const h = skyCanvas.height;
+        const cx = w / 2;
+        const horizonY = h * 0.8;
+
+        const hour = state.hour;
+        let skyGradient = ctxSky.createLinearGradient(0, 0, 0, h);
+        
+        const sunHeightFactor = -Math.cos((hour / 12) * Math.PI); 
+
+        if (sunHeightFactor > 0.2) { 
+            skyGradient.addColorStop(0, "#38bdf8");
+            skyGradient.addColorStop(1, "#bae6fd");
+        } else if (sunHeightFactor < -0.2) { 
+            skyGradient.addColorStop(0, "#0f172a");
+            skyGradient.addColorStop(1, "#1e293b");
+        } else { 
+            skyGradient.addColorStop(0, "#4f46e5");
+            skyGradient.addColorStop(0.5, "#fb923c");
+            skyGradient.addColorStop(1, "#fcd34d");
+        }
+        
+        ctxSky.fillStyle = skyGradient;
+        ctxSky.fillRect(0, 0, w, h);
+
+        const pathRx = w * 0.45;
+        const pathRy = h * 0.65; 
+
+        // Sky Logic
+        const sunSkyAngle = ((hour - 12) / 12) * Math.PI; 
+
+        // Draw Stars
+        ctxSky.save();
+        ctxSky.beginPath();
+        ctxSky.rect(0, 0, w, horizonY);
+        ctxSky.clip();
+        ctxSky.fillStyle = 'white';
+        
+        stars.forEach(star => {
+            const currentAngle = sunSkyAngle + star.angleOffset;
+            const rx = pathRx * star.radiusScale;
+            const ry = pathRy * star.radiusScale;
+            
+            const sx = cx + Math.sin(currentAngle) * rx;
+            const sy = horizonY + Math.cos(currentAngle + Math.PI) * ry;
+            
+            if (sy < horizonY) { 
+                ctxSky.globalAlpha = (sunHeightFactor > 0) ? Math.max(0, 1 - sunHeightFactor*3) * star.alpha : star.alpha;
+                ctxSky.beginPath();
+                ctxSky.arc(sx, sy, star.size, 0, Math.PI*2);
+                ctxSky.fill();
+            }
+        });
+        
+        ctxSky.globalAlpha = 1.0;
+        ctxSky.restore();
+
+        // Sky Coordinates & Sun/Venus Path
+        const sunX = cx + Math.sin(sunSkyAngle) * pathRx;
+        const sunY = horizonY + Math.cos(sunSkyAngle + Math.PI) * pathRy;
+
+        // Venus Orbit Line
+        ctxSky.save();
+        ctxSky.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctxSky.setLineDash([3, 5]);
+        ctxSky.lineWidth = 1;
+        ctxSky.beginPath();
+
+        const maxElong = 48 * (Math.PI / 180);
+        const steps = 20;
+        for (let i = 0; i <= steps; i++) {
+            const ang = sunSkyAngle - maxElong + (i / steps) * (maxElong * 2);
+            const px = cx + Math.sin(ang) * pathRx;
+            const py = horizonY + Math.cos(ang + Math.PI) * pathRy;
+            if (i === 0) ctxSky.moveTo(px, py);
+            else ctxSky.lineTo(px, py);
+        }
+        ctxSky.stroke();
+        ctxSky.setLineDash([]);
+        ctxSky.restore();
+
+        // Prepare functions for occlusion logic
+        const drawSun = () => {
+            if (sunY < horizonY + 30) { 
+                ctxSky.fillStyle = '#ef4444';
+                ctxSky.beginPath();
+                ctxSky.arc(sunX, sunY, 10, 0, Math.PI*2);
+                ctxSky.fill();
+                ctxSky.strokeStyle = '#fca5a5';
+                ctxSky.beginPath();
+                ctxSky.arc(sunX, sunY, 14, 0, Math.PI*2);
+                ctxSky.stroke();
+            }
+        };
+
+        const drawVenus = () => {
+            const venusSkyAngle = sunSkyAngle + elongation; 
+            const venusX = cx + Math.sin(venusSkyAngle) * pathRx;
+            const venusY = horizonY + Math.cos(venusSkyAngle + Math.PI) * pathRy;
+
+            if (venusY < horizonY + 20) {
+                const r = 270 / dist;
+                const k = (1 + dot / (mag_vs * mag_ve)) / 2;
+                const angleToSun = Math.atan2(sunY - venusY, sunX - venusX);
+                const isDay = sunHeightFactor > 0.2; 
+                
+                drawTinyVenus(ctxSky, venusX, venusY, r, k, angleToSun, isDay);
+                
+                ctxSky.fillStyle = isDay ? 'rgba(255,255,255,0.8)' : 'white';
+                ctxSky.font = '12px Arial';
+                ctxSky.fillText("金星", venusX + r + 4, venusY - r - 4);
+            }
+        };
+
+        // Determine Draw Order based on Distance (Occlusion)
+        // If dist > R_EARTH_ORBIT, Venus is farther than Sun -> Draw Venus first (Behind)
+        // If dist < R_EARTH_ORBIT, Venus is closer than Sun -> Draw Sun first (Front)
+        if (dist > R_EARTH_ORBIT) {
+            drawVenus();
+            drawSun();
+        } else {
+            drawSun();
+            drawVenus();
+        }
+
+        // Foreground
+        ctxSky.fillStyle = '#064e3b'; 
+        ctxSky.fillRect(0, horizonY, w, h - horizonY);
+        
+        // Compass
+        ctxSky.fillStyle = '#cbd5e1';
+        ctxSky.font = 'bold 16px Arial';
+        ctxSky.fillText("東", 20, horizonY + 25);
+        ctxSky.fillText("南", cx - 10, horizonY + 25);
+        ctxSky.fillText("西", w - 40, horizonY + 25);
+    }
+
+    setSpeed(3);
+    resizeCanvas();
+</script>
+</body>
+</html>

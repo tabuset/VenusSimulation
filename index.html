@@ -247,9 +247,9 @@
 
         <!-- Middle: Slider -->
         <div class="box area-slider">
-            <label for="timeSlider" style="margin-bottom: 5px; font-size:0.9rem;">日付の経過 (会合周期)</label>
-            <input type="range" id="timeSlider" min="0" max="584" value="0" step="0.1">
-            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">スライダーを動かして日数を進められます (0日〜584日)</div>
+            <label for="timeSlider" style="margin-bottom: 5px; font-size:0.9rem;">日付の経過 (会合周期2周分)</label>
+            <input type="range" id="timeSlider" min="0" max="1168" value="0" step="0.1">
+            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">スライダーを動かして日数を進められます (0日〜1168日)</div>
         </div>
 
         <!-- Bottom: Geocentric Sky View -->
@@ -709,11 +709,11 @@
             if (sunY < horizonY + 30) { 
                 ctxSky.fillStyle = '#ef4444';
                 ctxSky.beginPath();
-                ctxSky.arc(sunX, sunY, 10, 0, Math.PI*2);
+                ctxSky.arc(sunX, sunY, 25, 0, Math.PI*2);
                 ctxSky.fill();
                 ctxSky.strokeStyle = '#fca5a5';
                 ctxSky.beginPath();
-                ctxSky.arc(sunX, sunY, 14, 0, Math.PI*2);
+                ctxSky.arc(sunX, sunY, 32, 0, Math.PI*2);
                 ctxSky.stroke();
             }
         };
